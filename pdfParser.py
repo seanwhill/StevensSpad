@@ -3,7 +3,6 @@ Created on Jun 15, 2018
 
 @author: Sean Hill
 '''
-from tabula import read_pdf
 import os
 import re
 import pandas as pd
@@ -13,8 +12,8 @@ import xlsxwriter
  "numStudPerform, performResult, numStudSurv, survResult" '''
 dct = {}
 
-
-PDFDIRECTORY = '2017-18' 
+'''{SheetName, [DirectAssesmentAvg, IndirectAssesAvg]}'''
+summaryDct = {}
 
 '''
 loads pdfs into an array
@@ -65,15 +64,33 @@ def FillExcel():
     excl = pd.ExcelFile("NewExcelSheet.xlsx")
     writer = pd.ExcelWriter('NewExcelSheet.xlsx', engine='xlsxwriter')
     sheetNames = excl.sheet_names
-    print(sheetNames)
     
     df = excl.parse('Summary')
     df.to_excel(writer, 'Summary')
     
-    for sheet in sheetNames[1:]:
+    for sheet in sheetNames[1:]: 
         df = excl.parse(sheet)
         fillSheet(df, sheet, writer)
+    
     writer.save()
+    
+    excl2 = pd.ExcelFile("NewExcelSheet.xlsx")
+    writer2 = pd.ExcelWriter('NewExcelSheet.xlsx', engine='xlsxwriter')
+    
+    for sheet in sheetNames:
+        df = excl2.parse(sheet)
+        if sheet == 'Summary':
+            for x in range(0, df['Outcome'].size):
+                directAssesmentAverage = summaryDct[df['Outcome'][x]][0]
+                indirectAssesmentAverage = summaryDct[df['Outcome'][x]][1]
+
+                df['Direct Assessment Average'][x] = directAssesmentAverage
+                df['Indirect Assessment Average'][x] = indirectAssesmentAverage
+                df['|Difference|'][x] = abs(directAssesmentAverage - indirectAssesmentAverage)
+        df.to_excel(writer2, sheet, index=False)
+    
+    
+    writer2.save()
 
 '''
 fills in each sheet with the correct data for each outcome number and each course(year and session)
@@ -82,6 +99,7 @@ def fillSheet(df, sheetName, writer):
     totalNumStudents = 0
     totalWeightedDirect = 0
     survey = False
+    summaryDct[sheetName] = []
     for x in range(0, df['Course'].size):
         if df['Course'][x] == 'Total Students':
             df['Number of Students'][x] = totalNumStudents
@@ -90,13 +108,15 @@ def fillSheet(df, sheetName, writer):
             
         elif df['Course'][x] == 'Direct Assessment Average:':
             df['Number of Students'][x] = totalWeightedDirect / totalNumStudents
+            summaryDct[sheetName].append(totalWeightedDirect / totalNumStudents)
             totalNumStudents = 0
             totalWeightedDirect = 0
         
         elif df['Course'][x] == 'Indirect Assessment Average:':
             df['Number of Students'][x] = totalWeightedDirect / totalNumStudents
-            
+            summaryDct[sheetName].append(totalWeightedDirect / totalNumStudents)
 
+            
         elif type(df['Course'][x]) == str and df['Course'][x][-1] == ')':
             #TODO all of this splitting with REGEX
             courseNumber = df['Course'][x].split(',')[0]
@@ -156,7 +176,7 @@ def fillSheet(df, sheetName, writer):
             else:
                 #print("course Pdf Cannot Be Found")
                 pass
-    df.to_excel(writer, sheetName)
+    df.to_excel(writer, sheetName, index=False)
 
         
         
