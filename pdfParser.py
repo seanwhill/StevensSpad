@@ -19,14 +19,14 @@ PDFDIRECTORY = '2017-18'
 '''
 loads pdfs into an array
 '''
-def loadPdfs():
+def loadTxts():
     files = os.listdir()
-    pdfs = []
-    rgx = re.compile('.+[.]pdf')
+    txts = []
+    rgx = re.compile('.+_SPAD[.]txt')
     for x in files:
         if rgx.match(x):
-            pdfs.append(x)
-    return pdfs
+            txts.append(x)
+    return txts
 
 
 def isFloat(element):
@@ -42,31 +42,21 @@ Exctracts the data from the pdf and stores it in a dictionary
 key = pdfNmae
 value = [numStudPerform, performResult, numStudSurv, survResult]
 '''
-def extractPdfData(df, pdfName):
-    index = 0
-    tmp = ''
-    while (index < df['Program'].size):
-        if type(df['Program'][index]) == str and isFloat(df['Program'][index]):
-            tmp= df['Student'][index]
-            numStudPerform = tmp[:-4]
-            performResult = tmp[-4:]
-            
-            if (len(numStudPerform) == 0 or len(performResult) < 4):
-                numStudPerform = performResult = 'ERROR'
+def extractData(txt, courseName):
+    file = open(txt, 'r')
+    rgx = re.compile('\s*[0-9]+[.][0-9].*\s+([0-9]+)\s+([0-9]+[.]*[0-9]*)\s+([0-9]+)\s+([0-9]+[.]*[0-9]*)')
+    for line in file:
+        m = rgx.match(line)
+        if m:
+            numStudPerform = float(m.group(1))
+            performResult = float(m.group(2))
+            numStudSurv = float(m.group(3))
+            survResult = float(m.group(4))
                 
-            
-            tmp = df['ACE Survey'][index]
-            
-            numStudSurv = tmp[:-4]
-            survResult = tmp[-4:]
-            
-            if (len(numStudSurv) == 0 or len(survResult) < 4):
-                numStudPerform = performResult = 'ERROR'
-            
+            print(m.group(1) + ' ' + m.group(2) + ' ' + m.group(3) + ' ' + m.group(4))                
             dataArry = [numStudPerform, performResult, numStudSurv, survResult]
-            dct[pdfName].append(dataArry) 
-            
-        index += 1
+            dct[courseName].append(dataArry)
+        
 
 '''
 Opens the excel sheet that we want to write to and goes through each sheet and fills them in with data from the dictionary
@@ -89,48 +79,80 @@ def FillExcel():
 fills in each sheet with the correct data for each outcome number and each course(year and session)
 '''
 def fillSheet(df, sheetName, writer):
+    totalNumStudents = 0
+    totalWeightedDirect = 0
     survey = False
     for x in range(0, df['Course'].size):
-        if df['Course'][x] == 'Direct Assessment Average:':
+        if df['Course'][x] == 'Total Students':
+            df['Number of Students'][x] = totalNumStudents
+            df['Weighted Direct'][x] = totalWeightedDirect
             survey = True
-        if type(df['Course'][x]) == str and df['Course'][x][-1] == ')':
+            
+        elif df['Course'][x] == 'Direct Assessment Average:':
+            df['Number of Students'][x] = totalWeightedDirect / totalNumStudents
+            totalNumStudents = 0
+            totalWeightedDirect = 0
+        
+        elif df['Course'][x] == 'Indirect Assessment Average:':
+            df['Number of Students'][x] = totalWeightedDirect / totalNumStudents
+            
+
+        elif type(df['Course'][x]) == str and df['Course'][x][-1] == ')':
             #TODO all of this splitting with REGEX
             courseNumber = df['Course'][x].split(',')[0]
             courseYear = df['Course'][x].split('(')[1][:-1]
             outcomeNumber = df['Outcome Number'][x] - 1
             fullCourse = '_'.join([courseNumber, courseYear])
             #TODO: Deal with cases where pdf does not match spreadsheet.
+            print('AAAAAAA')
+            print(sheetName)
             print(fullCourse)
-            print(dct[fullCourse])
+            print(dct.keys())
+            print(len(dct[fullCourse]))
             print(outcomeNumber)
+            if len(dct[fullCourse]) < outcomeNumber:
+                df['Outcome Score'][x] = 'ERROR Outcome Number is not in the pdf'
+                continue
+            
             if fullCourse in dct.keys() and outcomeNumber != 'ERROR' and 'ERROR' not in dct[fullCourse][outcomeNumber]:
                 
                 courseData = dct[fullCourse][outcomeNumber]
-                numStud = float(courseData[0])
-                studPerf = float(courseData[1])
-                numSurv = float(courseData[2])
-                survRes = float(courseData[3])
                 
-                if studPerf < 4.0 and survRes < 4.0:
+                numStud = courseData[0]
+                studPerf = courseData[1]
+                numSurv = courseData[2]
+                survRes = courseData[3]
                 
-                    if survey == True:
-                        df['Number of Students'][x] = numSurv
-                        df['Outcome Score'][x] = survRes
-                        df['Weighted Direct'][x] = numSurv * survRes 
-                    else:
-                        df['Number of Students'][x] = numStud
-                        df['Outcome Score'][x] = studPerf
-                        df['Weighted Direct'][x] = numStud * studPerf
-                else:
-                    if survey == True:
-                        df['Number of Students'][x] = numSurv
-                        df['Outcome Score'][x] = 'ERROR'
-                        df['Weighted Direct'][x] = 'ERROR' 
-                    else:
-                        df['Number of Students'][x] = numStud
-                        df['Outcome Score'][x] = 'ERROR'
-                        df['Weighted Direct'][x] = 'ERROR'
+                
+                if survey == True:
+                    df['Number of Students'][x] = numSurv
                     
+                    if survRes <= 4.0:
+                        df['Outcome Score'][x] = survRes
+                        df['Weighted Direct'][x] = numSurv * survRes
+                    else:
+                        survRes = round(survRes / 25, 2)
+                        df['Outcome Score'][x] = str(survRes) + ', ERROR data not recorded on 4.0 scale'
+                        
+                    df['Weighted Direct'][x] = numSurv * survRes
+                    
+                    totalNumStudents += numSurv
+                    totalWeightedDirect += numSurv * survRes
+                    
+                else:
+                    df['Number of Students'][x] = numStud
+                    
+                    if studPerf <= 4.0:
+                        df['Outcome Score'][x] = studPerf
+                    else:
+                        studPerf = round(studPerf / 25, 2)
+                        df['Outcome Score'][x] = str(studPerf) + ', ERROR data not recorded on 4.0 scale'
+                        
+                    df['Weighted Direct'][x] = numStud * studPerf
+                    
+                    totalNumStudents += numStud
+                    totalWeightedDirect += numStud * studPerf
+
             else:
                 #print("course Pdf Cannot Be Found")
                 pass
@@ -141,17 +163,15 @@ def fillSheet(df, sheetName, writer):
     
 
 if __name__ == '__main__':
-    pdfs = loadPdfs()
-    for x in pdfs:
+    txts = loadTxts()
+    for x in txts:
         print(x)
         
         try:
-            pdfData = read_pdf(x)
             #TODO use REGEX for this
             courseName = '_'.join(x.split('_', 2)[:2])
             dct[courseName] = []
-            print(pdfData['Student'])
-            extractPdfData(pdfData, courseName)
+            extractData(x, courseName)
         except:
             print('Error reading pdf')
         
