@@ -6,7 +6,6 @@ Created on Jun 15, 2018
 import os
 import re
 import pandas as pd
-import xlsxwriter
 
 ''' key is the class name while the value is going to be a list in the format index = outcome. then string in the format of
  "numStudPerform, performResult, numStudSurv, survResult" '''
@@ -16,7 +15,7 @@ dct = {}
 summaryDct = {}
 
 '''
-loads pdfs into an array
+loads text file names into an array
 '''
 def loadTxts():
     files = os.listdir()
@@ -87,8 +86,19 @@ def FillExcel():
                 df['Direct Assessment Average'][x] = directAssesmentAverage
                 df['Indirect Assessment Average'][x] = indirectAssesmentAverage
                 df['|Difference|'][x] = abs(directAssesmentAverage - indirectAssesmentAverage)
-        df.to_excel(writer2, sheet, index=False)
-    
+            df.to_excel(writer2, sheet, index=False)
+            workbook  = writer2.book
+            worksheet = writer2.sheets[sheet]
+            
+            format1 = workbook.add_format({'num_format': '#,##0.00'})
+
+            worksheet.set_column('B:D', None, format1)            
+        else:
+            df.to_excel(writer2, sheet, index=False)
+            workbook  = writer2.book
+            worksheet = writer2.sheets[sheet]
+            format1 = workbook.add_format({'num_format': '#,##0.00'})
+            worksheet.set_column('D:E', None, format1)
     
     writer2.save()
 
@@ -100,6 +110,7 @@ def fillSheet(df, sheetName, writer):
     totalWeightedDirect = 0
     survey = False
     summaryDct[sheetName] = []
+    
     for x in range(0, df['Course'].size):
         if df['Course'][x] == 'Total Students':
             df['Number of Students'][x] = totalNumStudents
@@ -123,13 +134,7 @@ def fillSheet(df, sheetName, writer):
             courseYear = df['Course'][x].split('(')[1][:-1]
             outcomeNumber = df['Outcome Number'][x] - 1
             fullCourse = '_'.join([courseNumber, courseYear])
-            #TODO: Deal with cases where pdf does not match spreadsheet.
-            print('AAAAAAA')
-            print(sheetName)
-            print(fullCourse)
-            print(dct.keys())
-            print(len(dct[fullCourse]))
-            print(outcomeNumber)
+            
             if len(dct[fullCourse]) < outcomeNumber:
                 df['Outcome Score'][x] = 'ERROR Outcome Number is not in the pdf'
                 continue
@@ -172,10 +177,8 @@ def fillSheet(df, sheetName, writer):
                     
                     totalNumStudents += numStud
                     totalWeightedDirect += numStud * studPerf
-
-            else:
-                #print("course Pdf Cannot Be Found")
-                pass
+                
+            
     df.to_excel(writer, sheetName, index=False)
 
         

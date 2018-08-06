@@ -18,11 +18,14 @@ Creates an array of pdfs
 '''
 def loadPdfs():
     files = os.listdir(PDFDIRECTORY)
-    rgx = re.compile('.+[.]pdf')
+    rgx = re.compile('(.+)_(.+)_SPAD[.]pdf')
     for x in files:
-        if rgx.match(x):
-            #TODO use regex
-            pdf = '_'.join(x.split('_', 2)[:2])
+        m = rgx.match(x)
+        if m:
+            courseNum = m.group(1)
+            courseSem = m.group(2)
+            pdf = courseNum + '_' + courseSem
+            print(pdf)
             pdfs.append(pdf)
             
 '''
@@ -34,33 +37,18 @@ def FillExcel():
     sheetNames = excl.sheet_names
     
     df = excl.parse('Summary')
-    df.to_excel(writer, 'Summary')
+    df.to_excel(writer, 'Summary', index=False)
     
     for sheet in sheetNames[1:]:
         df = excl.parse(sheet)
         dct = extractExcelData(df)
         df = fillSheet(df, sheet, writer, dct)
-        df = cleanUpSheet(df)
-        df.to_excel(writer, sheet)
+        df.to_excel(writer, sheet, index=False)
         
     writer.save()
 
 '''
-Deletes the rows that do not apply to the outcome number on this page
-NOTICE:
-If we do not have the pdf and a sheet would typically have that course with an outcome number we delete it.
-
-Solution:
-Have a master sheet with every course and outcome number.
-'''
-def cleanUpSheet(df):
-    for i in range(0, df['Outcome Number'].size):
-        if df['Outcome Number'][i] == 'NA':
-            df = df.drop([i])
-    return df
-    
-'''
-Creates a dictionary of each course name ex. CS135 and the outcoeme number associated with it
+Creates a dictionary of each course name ex. CS135 and the outcome number associated with it
 '''
 def extractExcelData(df):
     dct = {}
