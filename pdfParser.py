@@ -14,11 +14,13 @@ dct = {}
 '''{SheetName, [DirectAssesmentAvg, IndirectAssesAvg]}'''
 summaryDct = {}
 
+TXTDIRECTORY = '2017-18' 
+
 '''
 loads text file names into an array
 '''
 def loadTxts():
-    files = os.listdir()
+    files = os.listdir(TXTDIRECTORY)
     txts = []
     rgx = re.compile('.+_SPAD[.]txt')
     for x in files:
@@ -37,11 +39,12 @@ def isFloat(element):
 
 '''
 Exctracts the data from the pdf and stores it in a dictionary
-key = pdfNmae
+key = CourseName ie. (CS115_17F)
 value = [numStudPerform, performResult, numStudSurv, survResult]
 '''
+   
 def extractData(txt, courseName):
-    file = open(txt, 'r')
+    file = open(TXTDIRECTORY +  '/' + txt, 'r')
     rgx = re.compile('\s*[0-9]+[.][0-9].*\s+([0-9]+)\s+([0-9]+[.]*[0-9]*)\s+([0-9]+)\s+([0-9]+[.]*[0-9]*)')
     for line in file:
         m = rgx.match(line)
@@ -76,6 +79,7 @@ def FillExcel():
     excl2 = pd.ExcelFile("NewExcelSheet.xlsx")
     writer2 = pd.ExcelWriter('NewExcelSheet.xlsx', engine='xlsxwriter')
     
+    '''Go through the sheets again to fill in data for Summary'''
     for sheet in sheetNames:
         df = excl2.parse(sheet)
         if sheet == 'Summary':
@@ -110,8 +114,11 @@ def fillSheet(df, sheetName, writer):
     totalWeightedDirect = 0
     survey = False
     summaryDct[sheetName] = []
-    
+    courseRgx = re.compile('(.+), .+ .+\((.+)\)')
+        
     for x in range(0, df['Course'].size):
+        m = courseRgx.match(df['Course'][x])
+        
         if df['Course'][x] == 'Total Students':
             df['Number of Students'][x] = totalNumStudents
             df['Weighted Direct'][x] = totalWeightedDirect
@@ -128,13 +135,12 @@ def fillSheet(df, sheetName, writer):
             summaryDct[sheetName].append(totalWeightedDirect / totalNumStudents)
 
             
-        elif type(df['Course'][x]) == str and df['Course'][x][-1] == ')':
-            #TODO all of this splitting with REGEX
-            courseNumber = df['Course'][x].split(',')[0]
-            courseYear = df['Course'][x].split('(')[1][:-1]
+        elif  m:
+            courseNumber = m.group(1)
+            courseYear = m.group(2)
             outcomeNumber = df['Outcome Number'][x] - 1
-            fullCourse = '_'.join([courseNumber, courseYear])
-            
+            fullCourse = courseNumber + '_' + courseYear
+                        
             if len(dct[fullCourse]) < outcomeNumber:
                 df['Outcome Score'][x] = 'ERROR Outcome Number is not in the pdf'
                 continue
@@ -187,17 +193,13 @@ def fillSheet(df, sheetName, writer):
 
 if __name__ == '__main__':
     txts = loadTxts()
-    for x in txts:
-        print(x)
-        
+    txtRgx = re.compile('(.+_.+)_SPAD\.txt')
+    for x in txts:  
         try:
-            #TODO use REGEX for this
-            courseName = '_'.join(x.split('_', 2)[:2])
-            dct[courseName] = []
-            extractData(x, courseName)
+            course = txtRgx.search(x).group(1)
+            dct[course] = []
+            extractData(x, course)
         except:
-            print('Error reading pdf')
-        
-
-        
+            print('Error reading txt')
+            
     FillExcel()
