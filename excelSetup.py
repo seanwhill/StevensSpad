@@ -36,15 +36,16 @@ def FillExcel():
     writer = pd.ExcelWriter(EXCELSHEET_W, engine='xlsxwriter')
     sheetNames = excl.sheet_names
     
-    df = excl.parse('Summary')
-    df.to_excel(writer, 'Summary', index=False)
     
-    for sheet in sheetNames[1:]:
+    for sheet in sheetNames[:-1]:
         df = excl.parse(sheet)
         dct = extractExcelData(df)
         df = fillSheet(df, sheet, writer, dct)
         df.to_excel(writer, sheet, index=False)
-        
+    
+    df = excl.parse('Summary')
+    df.to_excel(writer, 'Summary', index=False)
+    
     writer.save()
 
 '''
@@ -93,12 +94,14 @@ def fillSheet(df, sheetName, writer, dct):
             courses.append(x + ' Did not have a pdf!')
             outcomeNumbers.append('ERROR')
     
-    for x in range(0, 2 * len(courses) + 8):
+    for x in range(0, len(courses) + 3):
         emptylist.append(' ')
     
+    print (len(courses) * 2 + 8)
+    print(len(emptylist) * 2 + 1)
     d = {'Course': courses + ['Total Students', ' ', 'Direct Assessment Average:', ' ', 'Course'] + courses + ['Total Students', ' ', 'Indirect Assessment Average:'],
-          'Number of Students': emptylist, 'Outcome Number': outcomeNumbers + [' ', ' ', ' ', ' ', 'Outcome Number'] + outcomeNumbers + [' ', ' ', ' '],
-          'Outcome Score': emptylist, 'Weighted Direct': emptylist}    
+          'Number of Students': emptylist + [' ', 'Number of Students'] + emptylist, 'Outcome Number': outcomeNumbers + [' ', ' ', ' ', ' ', 'Outcome Number'] + outcomeNumbers + [' ', ' ', ' '],
+          'Outcome Score': emptylist + [' ', 'Outcome Score'] + emptylist, 'Weighted Direct': emptylist + [' ', 'Weighted Direct'] + emptylist}    
     newdf = pd.DataFrame(data=d)
     return newdf    
 
