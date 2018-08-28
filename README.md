@@ -16,7 +16,18 @@ make install
 Pandas for python 
 
 ```
-sudo apt-get install python3-pandas
+pip install pandas
+```
+
+xlsxwriter
+
+```
+pip install xlsxwriter
+```
+
+xlrd
+```
+pip install xlrd
 ```
 
 ## Pre Processing
