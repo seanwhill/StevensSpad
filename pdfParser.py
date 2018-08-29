@@ -11,7 +11,7 @@ import pandas as pd
  "numStudPerform, performResult, numStudSurv, survResult" '''
 dct = {}
 
-'''{SheetName, [DirectAssesmentAvg, IndirectAssesAvg]}'''
+'''{SheetName, [DirectAssesmentAvg row, IndirectAssesAvg row]}'''
 summaryDct = {}
 
 TXTDIRECTORY = '2017-18' 
@@ -54,7 +54,6 @@ def extractData(txt, courseName):
             numStudSurv = float(m.group(3))
             survResult = float(m.group(4))
                 
-            print(m.group(1) + ' ' + m.group(2) + ' ' + m.group(3) + ' ' + m.group(4))                
             dataArry = [numStudPerform, performResult, numStudSurv, survResult]
             dct[courseName].append(dataArry)
         
@@ -67,44 +66,48 @@ def FillExcel():
     writer = pd.ExcelWriter('NewExcelSheet.xlsx', engine='xlsxwriter')
     sheetNames = excl.sheet_names
     
-    df = excl.parse('Summary')
-    df.to_excel(writer, 'Summary')
-    
-    for sheet in sheetNames[1:]: 
+    for sheet in sheetNames[:-1]: 
         df = excl.parse(sheet)
         fillSheet(df, sheet, writer)
+        
+    df = excl.parse('Summary')
+    for x in range(0, df['Outcome'].size):
+        directAssesmentAverage = summaryDct[df['Outcome'][x]][0]
+        indirectAssesmentAverage = summaryDct[df['Outcome'][x]][1]
+
+        df['Direct Assessment Average'][x] = directAssesmentAverage
+        df['Indirect Assessment Average'][x] = indirectAssesmentAverage
+        df['|Difference|'][x] = abs(directAssesmentAverage - indirectAssesmentAverage)
+        
+    df.to_excel(writer, 'Summary', index=False)
     
+    workbook  = writer.book
+    worksheet = writer.sheets['Summary']
+    format1 = workbook.add_format({'num_format': '#,##0.00'})
+    format2 = workbook.add_format({'bold': True, 'align': 'center', 'bg_color': '#FFE699'})
+    format3 = workbook.add_format({'bold': True, 'bg_color': '#C0C0C0'})
+    border_bottom = workbook.add_format({'bottom': 1})
+    
+    border_bottom_right = workbook.add_format({'bottom': 1, 'right':1})
+
+    border_right = workbook.add_format({'right': 1})
+
+    worksheet.conditional_format(0,3,0,3, {'type': 'no_errors', 'format': border_bottom_right})
+    worksheet.conditional_format(11,0,11,0, {'type': 'no_errors', 'format': border_bottom_right})
+    worksheet.conditional_format(11,3,11,3, {'type': 'no_errors', 'format': border_bottom_right})
+
+
+    worksheet.conditional_format(0,0,11,0, {'type': 'no_errors', 'format': border_right})
+    worksheet.conditional_format(11,0,11,3, {'type': 'no_errors', 'format': border_bottom})
+    worksheet.conditional_format(0,3,11,3, {'type': 'no_errors', 'format': border_right})
+
+    
+    worksheet.conditional_format(0,0,0,3, {'type': 'no_errors', 'format': format2})
+    worksheet.conditional_format(1,0,11,0, {'type': 'no_errors', 'format': format3})
+    worksheet.set_column('A:A', 18, format1)
+    worksheet.set_column('B:C', 25, format1)
+    worksheet.set_column('D:D', 12, format1)
     writer.save()
-    
-    excl2 = pd.ExcelFile("NewExcelSheet.xlsx")
-    writer2 = pd.ExcelWriter('NewExcelSheet.xlsx', engine='xlsxwriter')
-    
-    '''Go through the sheets again to fill in data for Summary'''
-    for sheet in sheetNames:
-        df = excl2.parse(sheet)
-        if sheet == 'Summary':
-            for x in range(0, df['Outcome'].size):
-                directAssesmentAverage = summaryDct[df['Outcome'][x]][0]
-                indirectAssesmentAverage = summaryDct[df['Outcome'][x]][1]
-
-                df['Direct Assessment Average'][x] = directAssesmentAverage
-                df['Indirect Assessment Average'][x] = indirectAssesmentAverage
-                df['|Difference|'][x] = abs(directAssesmentAverage - indirectAssesmentAverage)
-            df.to_excel(writer2, sheet, index=False)
-            workbook  = writer2.book
-            worksheet = writer2.sheets[sheet]
-            
-            format1 = workbook.add_format({'num_format': '#,##0.00'})
-
-            worksheet.set_column('B:D', None, format1)            
-        else:
-            df.to_excel(writer2, sheet, index=False)
-            workbook  = writer2.book
-            worksheet = writer2.sheets[sheet]
-            format1 = workbook.add_format({'num_format': '#,##0.00'})
-            worksheet.set_column('D:E', None, format1)
-    
-    writer2.save()
 
 '''
 fills in each sheet with the correct data for each outcome number and each course(year and session)
@@ -114,8 +117,12 @@ def fillSheet(df, sheetName, writer):
     totalWeightedDirect = 0
     survey = False
     summaryDct[sheetName] = []
-    courseRgx = re.compile('(.+), .+ .+\((.+)\)')
-        
+    courseRgx = re.compile('(.+), .+\((.+)\)')
+    
+    courseRow = 0
+    indirectAssesmentRow = 0
+    directAssesmentRow = 0
+    
     for x in range(0, df['Course'].size):
         m = courseRgx.match(df['Course'][x])
         
@@ -129,10 +136,16 @@ def fillSheet(df, sheetName, writer):
             summaryDct[sheetName].append(totalWeightedDirect / totalNumStudents)
             totalNumStudents = 0
             totalWeightedDirect = 0
+            directAssesmentRow = x + 1
+
         
         elif df['Course'][x] == 'Indirect Assessment Average:':
             df['Number of Students'][x] = totalWeightedDirect / totalNumStudents
             summaryDct[sheetName].append(totalWeightedDirect / totalNumStudents)
+            indirectAssesmentRow = x + 1
+        
+        elif df['Course'][x] == 'Course':
+            courseRow = x + 1
 
             
         elif  m:
@@ -186,7 +199,58 @@ def fillSheet(df, sheetName, writer):
                 
             
     df.to_excel(writer, sheetName, index=False)
+    
+    '''Formatting the worksheet'''
+    
+    workbook  = writer.book
+    worksheet = writer.sheets[sheetName]
+    
+    format1 = workbook.add_format({'num_format': '#,##0.00'})
+    format2 = workbook.add_format({'bold': True,'bg_color': '#FFE699', 'border': 1})
+    format3 = workbook.add_format({'align': 'center'})
+    right_border = workbook.add_format({'right': 1})
+    
+    top_border = workbook.add_format({'top': 1})
+    border_bottom_right = workbook.add_format({'bottom': 1, 'right': 1})
 
+    align_right = workbook.add_format({'align': 'right'})
+
+    
+    worksheet.conditional_format(0,0,0,4, {'type': 'no_errors', 'format': format2})
+    worksheet.conditional_format(courseRow,0,courseRow,4, {'type': 'no_errors', 'format': format2})
+    worksheet.conditional_format(indirectAssesmentRow,0,indirectAssesmentRow,4, {'type': 'no_errors', 'format': format2})
+    worksheet.conditional_format(directAssesmentRow,0,directAssesmentRow,4, {'type': 'no_errors', 'format': format2})
+    
+    worksheet.conditional_format(directAssesmentRow-3,0,directAssesmentRow-3,0, {'type': 'no_errors', 'format': border_bottom_right})
+    worksheet.conditional_format(indirectAssesmentRow-3,0,indirectAssesmentRow-3,0, {'type': 'no_errors', 'format': border_bottom_right})
+
+
+    
+    worksheet.conditional_format(0,0,directAssesmentRow,0, {'type': 'no_errors', 'format': right_border})
+    worksheet.conditional_format(courseRow,0,indirectAssesmentRow,0, {'type': 'no_errors', 'format': right_border})
+
+    
+    worksheet.conditional_format(directAssesmentRow - 2,0,directAssesmentRow - 2,4, {'type': 'no_errors', 'format': top_border})
+    worksheet.conditional_format(indirectAssesmentRow - 2,0,indirectAssesmentRow - 2,4, {'type': 'no_errors', 'format': top_border})
+
+
+
+    
+    worksheet.set_column('A:A', 40, None)
+    worksheet.set_column('B:C', 18, None)
+    worksheet.set_column('D:E', 14, format1)
+    
+    worksheet.set_row(directAssesmentRow - 2, None, align_right)
+    worksheet.set_row(indirectAssesmentRow - 2, None, align_right)
+
+    worksheet.set_row(0, None, format3)
+    worksheet.set_row(courseRow, None, format3)
+    worksheet.set_row(indirectAssesmentRow, None, format3)
+    worksheet.set_row(directAssesmentRow, None, format3)
+
+
+
+    
         
         
     
